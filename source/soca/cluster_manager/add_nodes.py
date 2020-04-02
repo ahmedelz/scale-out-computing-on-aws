@@ -419,6 +419,10 @@ def main(**kwargs):
                 'Key': 'spot_allocation_strategy',
                 'Default': 'lowest-price'
             },
+            'SpotFleetIamRoleArn': {
+                'Key': None,
+                'Default': aligo_configuration['SpotFleetIamRoleArn']
+            },
             'SpotPrice': {
                 'Key': 'spot_price',
                 'Default': False

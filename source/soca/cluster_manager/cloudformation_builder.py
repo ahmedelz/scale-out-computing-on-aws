@@ -23,6 +23,7 @@ from troposphere.ec2 import PlacementGroup, \
     SpotOptions, \
     CpuOptions
 from troposphere.fsx import FileSystem, LustreConfiguration
+import troposphere.ec2 as ec2
 
 
 class CustomResourceSendAnonymousMetrics(AWSCustomObject):
@@ -150,7 +151,7 @@ systemctl enable chronyd
 
 # Prepare  Log folder
 mkdir -p $SOCA_HOST_SYSTEM_LOG
-echo "@reboot /bin/bash /apps/soca/$SOCA_CONFIGURATION/cluster_node_bootstrap/ComputeNodePostReboot.sh >> $SOCA_HOST_SYSTEM_LOG/ComputeNodePostInstall.log 2>&1" | crontab -
+echo "@reboot /bin/bash /apps/soca/$SOCA_CONFIGURATION/cluster_node_bootstrap/ComputeNodePostReboot.sh >> $SOCA_HOST_SYSTEM_LOG/ComputeNodePostReboot.log 2>&1" | crontab -
 $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.cfg /root/
 /bin/bash /apps/soca/$SOCA_CONFIGURATION/cluster_node_bootstrap/ComputeNode.sh ''' + params['SchedulerHostname'] + ''' >> $SOCA_HOST_SYSTEM_LOG/ComputeNode.sh.log 2>&1'''
 
@@ -160,9 +161,12 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
                 ltd.EbsOptimized = False
             else:
                 # t2 does not support CpuOptions
-                ltd.CpuOptions = CpuOptions(
-                    CoreCount=int(params["CoreCount"]),
-                    ThreadsPerCore=1 if params["ThreadsPerCore"] is False else 2)
+                if (params["SpotPrice"] is False) or len(instances_list) == 1:
+                    # Spotfleet with multiple instance types doesn't support CpuOptions
+                    # So we can't add CpuOptions if SpotPrice is specified and when multiple instances are specified
+                    ltd.CpuOptions = CpuOptions(
+                        CoreCount=int(params["CoreCount"]),
+                        ThreadsPerCore=1 if params["ThreadsPerCore"] is False else 2)
 
         ltd.IamInstanceProfile = IamInstanceProfile(Arn=params["ComputeNodeInstanceProfileArn"])
         ltd.KeyName = params["SSHKeyPair"]
@@ -203,6 +207,19 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
                         DeleteOnTermination="false" if params["KeepEbs"] is True else "true",
                         Encrypted=True))
             )
+        ltd.TagSpecifications = [ec2.TagSpecifications( 
+            ResourceType="instance", 
+            Tags = base_Tags( 
+                Name=str(params["ClusterId"]) + "-compute-job-" + str(params["JobId"]), 
+                _soca_JobId=str(params["JobId"]), 
+                _soca_JobName=str(params["JobName"]),
+                _soca_JobQueue=str(params["JobQueue"]), 
+                _soca_StackId=stack_name, 
+                _soca_JobOwner=str(params["JobOwner"]), 
+                _soca_JobProject=str(params["JobProject"]),
+                _soca_KeepForever=str(params["KeepForever"]).lower(), 
+                _soca_ClusterId=str(params["ClusterId"]), 
+                _soca_NodeType="soca-compute-node"))]
         # End LaunchTemplateData
 
         # Begin Launch Template Resource
@@ -212,31 +229,115 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
         t.add_resource(lt)
         # End Launch Template Resource
 
-        asg_lt.LaunchTemplateSpecification = LaunchTemplateSpecification(
-            LaunchTemplateId=Ref(lt),
-            Version=GetAtt(lt, "LatestVersionNumber")
-        )
+        if (params["SpotPrice"] is not False) and (int(params["DesiredCapacity"]) > 1 or len(instances_list)>1):
+            # SpotPrice is defined and DesiredCapacity > 1 or need to try more than 1 instance_type
+            # Create SpotFleet
 
-        asg_lt.Overrides = []
-        for instance in instances_list:
-            asg_lt.Overrides.append(LaunchTemplateOverrides(
-                InstanceType=instance))
+            # Begin SpotFleetRequestConfigData Resource
+            sfrcd = ec2.SpotFleetRequestConfigData()
+            sfrcd.AllocationStrategy = "capacityOptimized"
+            sfrcd.ExcessCapacityTerminationPolicy = "noTermination"
+            sfrcd.IamFleetRole = params["SpotFleetIamRoleArn"]
+            sfrcd.InstanceInterruptionBehavior = "terminate"
+            if params["SpotPrice"] != "auto":
+                sfrcd.SpotPrice = str(params["SpotPrice"])
+            sfrcd.TargetCapacity = params["DesiredCapacity"]
+            sfrcd.Type = "maintain"
+            sfltc = ec2.LaunchTemplateConfigs()
+            sflts = ec2.LaunchTemplateSpecification(
+                    LaunchTemplateId=Ref(lt),
+                    Version=GetAtt(lt, "LatestVersionNumber"))
+            sfltc.LaunchTemplateSpecification = sflts
+            sfltc.Overrides = []
+            for subnet in params["SubnetId"]:
+                for instance in instances_list:
+                    sfltc.Overrides.append(ec2.LaunchTemplateOverrides(
+                            InstanceType = instance,
+                            SubnetId = subnet))
+            sfrcd.LaunchTemplateConfigs = [sfltc]
+            TagSpecifications = ec2.SpotFleetTagSpecification(
+                ResourceType="spot-fleet-request",
+                Tags=base_Tags(
+                Name=str(params["ClusterId"]) + "-compute-job-" + str(params["JobId"]),
+                _soca_JobId=str(params["JobId"]),
+                _soca_JobName=str(params["JobName"]),
+                _soca_JobQueue=str(params["JobQueue"]),
+                _soca_StackId=stack_name,
+                _soca_JobOwner=str(params["JobOwner"]),
+                _soca_JobProject=str(params["JobProject"]),
+                _soca_KeepForever=str(params["KeepForever"]).lower(),
+                _soca_ClusterId=str(params["ClusterId"]),
+                _soca_NodeType="soca-compute-node"))
+            # End SpotFleetRequestConfigData Resource
 
-        # Begin InstancesDistribution
-        if params["SpotPrice"] is not False and \
-                params["SpotAllocationCount"] is not False and \
-                (params["DesiredCapacity"] - params["SpotAllocationCount"]) > 0:
-            mip_usage = True
-            idistribution = InstancesDistribution()
-            idistribution.OnDemandAllocationStrategy = "prioritized"  # only supported value
-            idistribution.OnDemandBaseCapacity = params["DesiredCapacity"] - params["SpotAllocationCount"]
-            idistribution.OnDemandPercentageAboveBaseCapacity = "0"  # force the other instances to be SPOT
-            idistribution.SpotMaxPrice = Ref("AWS::NoValue") if params["SpotPrice"] == "auto" else str(
-                params["SpotPrice"])
-            idistribution.SpotAllocationStrategy = params['SpotAllocationStrategy']
-            mip.InstancesDistribution = idistribution
+            # Begin SpotFleet Resource
+            spotfleet = ec2.SpotFleet("SpotFleet")
+            spotfleet.SpotFleetRequestConfigData = sfrcd
+            t.add_resource(spotfleet)
+            # End SpotFleet Resource
+        else:
 
-        # End MixedPolicyInstance
+            asg_lt.LaunchTemplateSpecification = LaunchTemplateSpecification(
+                LaunchTemplateId=Ref(lt),
+                Version=GetAtt(lt, "LatestVersionNumber")
+            )
+
+            asg_lt.Overrides = []
+            for instance in instances_list:
+                asg_lt.Overrides.append(LaunchTemplateOverrides(
+                    InstanceType=instance))
+
+            # Begin InstancesDistribution
+            if params["SpotPrice"] is not False and \
+                    params["SpotAllocationCount"] is not False and \
+                    (int(params["DesiredCapacity"]) - int(params["SpotAllocationCount"])) > 0:
+                mip_usage = True
+                idistribution = InstancesDistribution()
+                idistribution.OnDemandAllocationStrategy = "prioritized"  # only supported value
+                idistribution.OnDemandBaseCapacity = params["DesiredCapacity"] - params["SpotAllocationCount"]
+                idistribution.OnDemandPercentageAboveBaseCapacity = "0"  # force the other instances to be SPOT
+                idistribution.SpotMaxPrice = Ref("AWS::NoValue") if params["SpotPrice"] == "auto" else str(
+                    params["SpotPrice"])
+                idistribution.SpotAllocationStrategy = params['SpotAllocationStrategy']
+                mip.InstancesDistribution = idistribution
+
+            # End MixedPolicyInstance
+
+            # Begin AutoScalingGroup Resource
+            asg = AutoScalingGroup("AutoScalingComputeGroup")
+            asg.DependsOn = "NodeLaunchTemplate"
+            if mip_usage is True or instances_list.__len__() > 1:
+                mip.LaunchTemplate = asg_lt
+                asg.MixedInstancesPolicy = mip
+
+            else:
+                asg.LaunchTemplate = LaunchTemplateSpecification(
+                    LaunchTemplateId=Ref(lt),
+                    Version=GetAtt(lt, "LatestVersionNumber"))
+
+            asg.MinSize = int(params["DesiredCapacity"])
+            asg.MaxSize = int(params["DesiredCapacity"])
+            asg.VPCZoneIdentifier = params["SubnetId"]
+
+            if params["PlacementGroup"] is True:
+                pg = PlacementGroup("ComputeNodePlacementGroup")
+                pg.Strategy = "cluster"
+                t.add_resource(pg)
+                asg.PlacementGroup = Ref(pg)
+
+            asg.Tags = Tags(
+                Name=str(params["ClusterId"]) + "-compute-job-" + str(params["JobId"]),
+                _soca_JobId=str(params["JobId"]),
+                _soca_JobName=str(params["JobName"]),
+                _soca_JobQueue=str(params["JobQueue"]),
+                _soca_StackId=stack_name,
+                _soca_JobOwner=str(params["JobOwner"]),
+                _soca_JobProject=str(params["JobProject"]),
+                _soca_KeepForever=str(params["KeepForever"]).lower(),
+                _soca_ClusterId=str(params["ClusterId"]),
+                _soca_NodeType="soca-compute-node")
+            t.add_resource(asg)
+            # End AutoScalingGroup Resource
 
         # Begin FSx for Lustre
         if params["FSxLustreConfiguration"]["fsx_lustre"] is not False:
@@ -269,42 +370,6 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
                 t.add_resource(fsx_lustre)
         # End FSx For Lustre
 
-        # Begin AutoScalingGroup Resource
-        asg = AutoScalingGroup("AutoScalingComputeGroup")
-        asg.DependsOn = "NodeLaunchTemplate"
-        if mip_usage is True or instances_list.__len__() > 1:
-            mip.LaunchTemplate = asg_lt
-            asg.MixedInstancesPolicy = mip
-
-        else:
-            asg.LaunchTemplate = LaunchTemplateSpecification(
-                LaunchTemplateId=Ref(lt),
-                Version=GetAtt(lt, "LatestVersionNumber"))
-
-        asg.MinSize = int(params["DesiredCapacity"])
-        asg.MaxSize = int(params["DesiredCapacity"])
-        asg.VPCZoneIdentifier = params["SubnetId"]
-
-        if params["PlacementGroup"] is True:
-            pg = PlacementGroup("ComputeNodePlacementGroup")
-            pg.Strategy = "cluster"
-            t.add_resource(pg)
-            asg.PlacementGroup = Ref(pg)
-
-        asg.Tags = Tags(
-            Name=str(params["ClusterId"]) + "-compute-job-" + str(params["JobId"]),
-            _soca_JobId=str(params["JobId"]),
-            _soca_JobName=str(params["JobName"]),
-            _soca_JobQueue=str(params["JobQueue"]),
-            _soca_StackId=stack_name,
-            _soca_JobOwner=str(params["JobOwner"]),
-            _soca_JobProject=str(params["JobProject"]),
-            _soca_KeepForever=str(params["KeepForever"]).lower(),
-            _soca_ClusterId=str(params["ClusterId"]),
-            _soca_NodeType="soca-compute-node")
-        t.add_resource(asg)
-        # End AutoScalingGroup Resource
-
         # Begin Custom Resource
         # Change Mapping to No if you want to disable this
         if allow_anonymous_data_collection is True:
@@ -321,7 +386,7 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
             metrics.KeepForever = str(params["KeepForever"])
             metrics.FsxLustre = str(params["FSxLustreConfiguration"])
             t.add_resource(metrics)
-            # End Custom Resource
+        # End Custom Resource
 
         if debug is True:
             print(t.to_json())

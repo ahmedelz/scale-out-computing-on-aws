@@ -160,6 +160,36 @@ Resources:
 
   # Begin IAM
 
+  aws-ec2-spot-fleet-tagging-role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub "spotfleet.${AWS::URLSuffix}"
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole
+
+  AWSServiceRoleForEC2SpotFleet:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub "spotfleet.${AWS::URLSuffix}"
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/aws-service-role/AWSEC2SpotFleetServiceRolePolicy
+
   ComputeNodeIAMRole:
     Metadata:
       cfn_nag:
@@ -282,6 +312,7 @@ Resources:
                   - ec2:DescribeLaunchTemplates
                   - ec2:DescribeLaunchTemplateVersions
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeSpotFleetRequests
                   - fsx:DescribeFileSystems
                   - autoscaling:DescribeAutoScalingGroups
                   - autoscaling:DescribeScalingActivities
@@ -328,6 +359,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - ec2:RunInstances
+                  - ec2:CreateTags
+                  - ec2:TerminateInstances
                   - ec2:CreatePlacementGroup
                   - ec2:DeletePlacementGroup
                 Resource:
@@ -386,6 +419,8 @@ Resources:
                 Action:
                   - ec2:CreatePlacementGroup
                   - ec2:DeletePlacementGroup
+                  - ec2:RequestSpotFleet
+                  - ec2:CancelSpotFleetRequests
                 Resource: "*"
 
               - Effect: Allow
@@ -401,7 +436,9 @@ Resources:
                 Action:
                   - iam:PassRole
                   - iam:CreateServiceLinkedRole
-                Resource: !GetAtt ComputeNodeIAMRole.Arn
+                Resource: 
+                  - !GetAtt ComputeNodeIAMRole.Arn
+                  - !GetAtt aws-ec2-spot-fleet-tagging-role.Arn
 
 
 
@@ -496,6 +533,8 @@ Outputs:
     Value: !Ref SchedulerIAMRole
   SchedulerIAMRoleArn:
     Value: !GetAtt SchedulerIAMRole.Arn
+  SpotFleetIamRoleArn:
+    Value: !GetAtt aws-ec2-spot-fleet-tagging-role.Arn
   SolutionMetricsRole:
     Value: !Ref LambdaSolutionMetricRole
   SolutionMetricsRoleArn:
