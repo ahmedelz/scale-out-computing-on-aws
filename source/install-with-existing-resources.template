@@ -148,7 +148,7 @@ Parameters:
 
   S3InstallFolder:
     Type: String
-    Default: %%SOLUTION_NAME%%/%%VERSION%%  
+    Default: %%SOLUTION_NAME%%/%%VERSION%%
     Description: Name of the S3 folder where you uploaded SOCA
 
   SecurityGroupIdScheduler:
