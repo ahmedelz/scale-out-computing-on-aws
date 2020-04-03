@@ -518,7 +518,7 @@ Outputs:
     Value: !Ref SchedulerIAMRole
   SchedulerIAMRoleArn:
     Value: !GetAtt SchedulerIAMRole.Arn
-  SpotFleetIamRoleArn:
+  SpotFleetIAMRoleArn:
     Value: !GetAtt AWSEC2SpotFleetTaggingRole.Arn
   SolutionMetricsRole:
     Value: !Ref LambdaSolutionMetricRole
