@@ -130,7 +130,10 @@ def check_config(**kwargs):
                             aligo_configuration['PrivateSubnet3']]
 
     if kwargs['subnet_id'] is False:
-        kwargs['subnet_id'] = [random.choice(soca_private_subnets)]
+        if kwargs['spot_price'] is not False and (int(kwargs['desired_capacity']) > 1 or kwargs['instance_type'].__len__() > 1):
+            kwargs['subnet_id'] = soca_private_subnets
+        else:
+            kwargs['subnet_id'] = [random.choice(soca_private_subnets)]
     else:
         kwargs['subnet_id'] = kwargs['subnet_id'].split('+')
         for subnet in kwargs['subnet_id']:
@@ -419,9 +422,9 @@ def main(**kwargs):
                 'Key': 'spot_allocation_strategy',
                 'Default': 'lowest-price'
             },
-            'SpotFleetIamRoleArn': {
+            'SpotFleetIAMRoleArn': {
                 'Key': None,
-                'Default': aligo_configuration['SpotFleetIamRoleArn']
+                'Default': aligo_configuration['SpotFleetIAMRoleArn']
             },
             'SpotPrice': {
                 'Key': 'spot_price',

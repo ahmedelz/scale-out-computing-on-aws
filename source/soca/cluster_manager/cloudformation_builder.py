@@ -237,7 +237,7 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
             sfrcd = ec2.SpotFleetRequestConfigData()
             sfrcd.AllocationStrategy = "capacityOptimized"
             sfrcd.ExcessCapacityTerminationPolicy = "noTermination"
-            sfrcd.IamFleetRole = params["SpotFleetIamRoleArn"]
+            sfrcd.IamFleetRole = params["SpotFleetIAMRoleArn"]
             sfrcd.InstanceInterruptionBehavior = "terminate"
             if params["SpotPrice"] != "auto":
                 sfrcd.SpotPrice = str(params["SpotPrice"])
