@@ -172,8 +172,33 @@ Resources:
                 - !Sub "spotfleet.${AWS::URLSuffix}"
             Action:
               - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole
+      Policies:
+        - PolicyName: SpotFleetPermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeImages
+                  - ec2:DescribeSubnets 
+                  - ec2:RequestSpotInstances 
+                  - ec2:TerminateInstances 
+                  - ec2:DescribeInstanceStatus 
+                  - ec2:CreateTags
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ec2:*::image/*"
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:subnet/*"
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"  
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
+                Condition:
+                  "ForAllValues:ArnEqualsIfExists":
+                      "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Condition:
+                  "StringEquals":
+                      "iam:PassedToService": ["ec2.amazonaws.com", "ec2.amazonaws.com.cn"]
 
   ComputeNodeIAMRole:
     Metadata:
@@ -351,7 +376,6 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:subnet/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*::snapshot/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:launch-template/*"
@@ -408,6 +432,9 @@ Resources:
                   - ec2:RequestSpotFleet
                   - ec2:CancelSpotFleetRequests
                 Resource: "*"
+                Condition:
+                  "ForAllValues:ArnEqualsIfExists":
+                      "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
 
               - Effect: Allow
                 Action:
@@ -425,6 +452,9 @@ Resources:
                 Resource: 
                   - !GetAtt ComputeNodeIAMRole.Arn
                   - !GetAtt AWSEC2SpotFleetTaggingRole.Arn
+                Condition:
+                  "ForAllValues:ArnEqualsIfExists":
+                      "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
 
 
 
