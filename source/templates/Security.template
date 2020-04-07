@@ -160,46 +160,6 @@ Resources:
 
   # Begin IAM
 
-  AWSEC2SpotFleetTaggingRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - !Sub "spotfleet.${AWS::URLSuffix}"
-            Action:
-              - sts:AssumeRole
-      Policies:
-        - PolicyName: SpotFleetPermissions
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:DescribeImages
-                  - ec2:DescribeSubnets 
-                  - ec2:RequestSpotInstances 
-                  - ec2:TerminateInstances 
-                  - ec2:DescribeInstanceStatus 
-                  - ec2:CreateTags
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:ec2:*::image/*"
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:subnet/*"
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"  
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
-                Condition:
-                  "ForAllValues:ArnEqualsIfExists":
-                      "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
-              - Effect: Allow
-                Action:
-                  - iam:PassRole
-                Condition:
-                  "StringEquals":
-                      "iam:PassedToService": ["ec2.amazonaws.com", "ec2.amazonaws.com.cn"]
-
   ComputeNodeIAMRole:
     Metadata:
       cfn_nag:
@@ -277,6 +237,48 @@ Resources:
       Roles:
         - !Ref ComputeNodeIAMRole
       #InstanceProfileName: !Sub ${ClusterId}-ComputeNodeInstanceProfile
+
+  AWSEC2SpotFleetTaggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub "spotfleet.${AWS::URLSuffix}"
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: SpotFleetPermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeImages
+                  - ec2:DescribeSubnets 
+                  - ec2:RequestSpotInstances 
+                  - ec2:TerminateInstances 
+                  - ec2:DescribeInstanceStatus 
+                  - ec2:CreateTags
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ec2:*::image/*"
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:subnet/*"
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"  
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
+                Condition:
+                  "ForAllValues:ArnEqualsIfExists":
+                      "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: 
+                  - !GetAtt ComputeNodeIAMRole.Arn
+                Condition:
+                  "StringEquals":
+                      "iam:PassedToService": ["ec2.amazonaws.com", "ec2.amazonaws.com.cn"]
 
   SchedulerIAMRole:
     Metadata:
@@ -455,7 +457,6 @@ Resources:
                 Condition:
                   "ForAllValues:ArnEqualsIfExists":
                       "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
-
 
 
   SchedulerIAMInstanceProfile:
