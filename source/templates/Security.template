@@ -259,15 +259,15 @@ Resources:
                 Action:
                   - ec2:DescribeImages
                   - ec2:DescribeSubnets 
+                  - ec2:DescribeInstanceStatus 
+                Resource: "*"
+              - Effect: Allow
+                Action:
                   - ec2:RequestSpotInstances 
                   - ec2:TerminateInstances 
-                  - ec2:DescribeInstanceStatus 
                   - ec2:CreateTags
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:ec2:*::image/*"
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:subnet/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"  
-                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:key-pair/*"
                 Condition:
                   "ForAllValues:ArnEqualsIfExists":
                       "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
