@@ -238,7 +238,7 @@ Resources:
         - !Ref ComputeNodeIAMRole
       #InstanceProfileName: !Sub ${ClusterId}-ComputeNodeInstanceProfile
 
-  AWSEC2SpotFleetTaggingRole:
+  SpotFleetIAMRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -453,7 +453,7 @@ Resources:
                   - iam:CreateServiceLinkedRole
                 Resource: 
                   - !GetAtt ComputeNodeIAMRole.Arn
-                  - !GetAtt AWSEC2SpotFleetTaggingRole.Arn
+                  - !GetAtt SpotFleetIAMRole.Arn
                 Condition:
                   "ForAllValues:ArnEqualsIfExists":
                       "ec2:Vpc": !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${VpcId}"
@@ -551,7 +551,7 @@ Outputs:
   SchedulerIAMRoleArn:
     Value: !GetAtt SchedulerIAMRole.Arn
   SpotFleetIAMRoleArn:
-    Value: !GetAtt AWSEC2SpotFleetTaggingRole.Arn
+    Value: !GetAtt SpotFleetIAMRole.Arn
   SolutionMetricsRole:
     Value: !Ref LambdaSolutionMetricRole
   SolutionMetricsRoleArn:
