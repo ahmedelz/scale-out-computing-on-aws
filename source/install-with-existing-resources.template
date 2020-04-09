@@ -4,7 +4,7 @@
 #
 
 AWSTemplateFormatVersion: 2010-09-09
-Description: (SO0072) - Scale-Out Computing on AWS. Template version 1
+Description: (SO0072) - Scale-Out Computing on AWS. Template version 2.1.0
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:

@@ -357,6 +357,7 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:volume/*"
                   - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:network-interface/*"
+                  - !Sub "arn:${AWS::Partition}:ec2:*:${AWS::AccountId}:instance/*"
 
               - Effect: Allow
                 Action:
@@ -371,8 +372,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ec2:RunInstances
-                  - ec2:CreateTags
-                  - ec2:TerminateInstances
                   - ec2:CreatePlacementGroup
                   - ec2:DeletePlacementGroup
                 Resource:

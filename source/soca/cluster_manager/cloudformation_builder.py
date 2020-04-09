@@ -155,13 +155,14 @@ echo "@reboot /bin/bash /apps/soca/$SOCA_CONFIGURATION/cluster_node_bootstrap/Co
 $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.cfg /root/
 /bin/bash /apps/soca/$SOCA_CONFIGURATION/cluster_node_bootstrap/ComputeNode.sh ''' + params['SchedulerHostname'] + ''' >> $SOCA_HOST_SYSTEM_LOG/ComputeNode.sh.log 2>&1'''
 
+        SpotFleet = True if ((params["SpotPrice"] is not False) and (int(params["DesiredCapacity"]) > 1 or len(instances_list)>1)) else False
         ltd.EbsOptimized = True
         for instance in instances_list:
             if "t2." in instance:
                 ltd.EbsOptimized = False
             else:
-                # t2 does not support CpuOptions
-                if (params["SpotPrice"] is False) or len(instances_list) == 1:
+                # metal + t2 does not support CpuOptions
+                if "metal" not in instance and (SpotFleet is False or len(instances_list) == 1):
                     # Spotfleet with multiple instance types doesn't support CpuOptions
                     # So we can't add CpuOptions if SpotPrice is specified and when multiple instances are specified
                     ltd.CpuOptions = CpuOptions(
@@ -229,13 +230,13 @@ $AWS s3 cp s3://$SOCA_INSTALL_BUCKET/$SOCA_INSTALL_BUCKET_FOLDER/scripts/config.
         t.add_resource(lt)
         # End Launch Template Resource
 
-        if (params["SpotPrice"] is not False) and (int(params["DesiredCapacity"]) > 1 or len(instances_list)>1):
+        if SpotFleet is True:
             # SpotPrice is defined and DesiredCapacity > 1 or need to try more than 1 instance_type
             # Create SpotFleet
 
             # Begin SpotFleetRequestConfigData Resource
             sfrcd = ec2.SpotFleetRequestConfigData()
-            sfrcd.AllocationStrategy = "capacityOptimized"
+            sfrcd.AllocationStrategy = params["SpotAllocationStrategy"]
             sfrcd.ExcessCapacityTerminationPolicy = "noTermination"
             sfrcd.IamFleetRole = params["SpotFleetIAMRoleArn"]
             sfrcd.InstanceInterruptionBehavior = "terminate"

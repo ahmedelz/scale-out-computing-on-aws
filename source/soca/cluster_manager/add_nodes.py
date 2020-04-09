@@ -129,8 +129,10 @@ def check_config(**kwargs):
                             aligo_configuration['PrivateSubnet2'],
                             aligo_configuration['PrivateSubnet3']]
 
+    SpotFleet = True if (kwargs['spot_price'] is not False and (int(kwargs['desired_capacity']) > 1 or kwargs['instance_type'].__len__() > 1)) else False
+
     if kwargs['subnet_id'] is False:
-        if kwargs['spot_price'] is not False and (int(kwargs['desired_capacity']) > 1 or kwargs['instance_type'].__len__() > 1):
+        if SpotFleet is True:
             kwargs['subnet_id'] = soca_private_subnets
         else:
             kwargs['subnet_id'] = [random.choice(soca_private_subnets)]
@@ -182,10 +184,39 @@ def check_config(**kwargs):
 
 
     # Validate Spot Allocation Strategy
+    mapping = {
+        "lowest-price":
+            {
+                "ASG": "lowest-price",
+                "SpotFleet": "lowestPrice",
+                "accepted_values": ["lowest-price", "lowestprice"]
+            },
+        "diversified":
+            {
+                "ASG": "lowest-price",
+                "SpotFleet": "diversified",
+                "accepted_values": ["diversified"]
+            },
+        "capacity-optimized":
+            {
+                "ASG": "capacity-optimized",
+                "SpotFleet": "capacityOptimized",
+                "accepted_values": ["capacityoptimized", "capacity-optimized", "optimized"]
+            }
+    }
+
     if kwargs['spot_allocation_strategy'] is not False:
-        spot_allocation_strategy_allowed = ['lowest-price', 'capacity-optimized']
+        for k,v in mapping.items():
+            if kwargs['spot_allocation_strategy'].lower() in v["accepted_values"]:
+                if SpotFleet is True:
+                    kwargs['spot_allocation_strategy'] = v["SpotFleet"]
+                    break
+                else:
+                    kwargs['spot_allocation_strategy'] = v["ASG"]
+                    break
+        spot_allocation_strategy_allowed = ['lowestPrice', 'lowest-price', 'diversified', 'capacityOptimized', 'capacity-optimized']
         if kwargs['spot_allocation_strategy'] not in spot_allocation_strategy_allowed:
-            error = return_message('spot_allocation_strategy_allowed (' + str(kwargs['spot_allocation_strategy']) + ') must be one of the following value: ' + ','.join(spot_allocation_strategy_allowed))
+            error = return_message('spot_allocation_strategy_allowed (' + str(kwargs['spot_allocation_strategy']) + ') must be one of the following value: ' + ', '.join(spot_allocation_strategy_allowed))
 
     # Validate Spot Allocation Percentage
     if kwargs['spot_allocation_count'] is not False:
