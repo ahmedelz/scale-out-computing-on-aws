@@ -563,7 +563,7 @@ if __name__ == "__main__":
     parser.add_argument('--scratch_iops', default=0, nargs='?', help="Size of /scratch in GB")
     parser.add_argument('--scratch_size', default=0, nargs='?', help="Size of /scratch in GB")
     parser.add_argument('--spot_allocation_count', default=False, nargs='?', help="When using mixed OD and SPOT, choose %% of SPOT")
-    parser.add_argument('--spot_allocation_strategy', default=False, nargs='?', help="lowest-cost or capacity-optimized")
+    parser.add_argument('--spot_allocation_strategy', default=False, nargs='?', help="lowest-cost or capacity-optimized or diversified (supported only for SpotFleet)")
     parser.add_argument('--spot_price', nargs='?', default=False, help="Spot Price")
     parser.add_argument('--keep_ebs', action='store_const', const=True, default=False, help="Do not delete EBS disk")
     parser.add_argument('--subnet_id', default=False, help='Launch capacity in a special subnet')
